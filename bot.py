@@ -25,7 +25,7 @@ class Colors:
     RED = Fore.RED
     CYAN = Fore.CYAN
     MAGENTA = Fore.MAGENTA
-    BLUE = Fore.BLUE  # <--- INI SUDAH DITAMBAHKAN
+    BLUE = Fore.BLUE
     WHITE = Fore.WHITE
     BRIGHT_GREEN = Fore.LIGHTGREEN_EX
     BRIGHT_MAGENTA = Fore.LIGHTMAGENTA_EX
@@ -75,31 +75,28 @@ async def display_welcome_screen():
     print(f"{Colors.RESET}")
     await asyncio.sleep(1)
 
-# Mengubah nama variabel timezone dan cara definisinya agar lebih berbeda
 eastern_asia_timezone = pytz.timezone('Asia/Jakarta')
 
-class FaucetAutomationCore: # Nama kelas diubah total agar lebih berbeda
-    def __init__(self, initial_headers: dict = None) -> None: # Menambahkan parameter opsional
-        # Mengubah struktur dan nama header agar lebih berbeda
+class FaucetAutomationCore:
+    def __init__(self, initial_headers: dict = None) -> None:
         self._http_headers = {
-            "Accept": "*/*", # Mengubah nilai
+            "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.9",
-            "X-Requested-With": "XMLHttpRequest", # Menambahkan header baru
+            "X-Requested-With": "XMLHttpRequest",
             "Referer": "https://multivm.injective.com/",
             "Sec-Fetch-Site": "cross-site",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Dest": "empty",
             "User-Agent": FakeUserAgent().random,
-            "Origin": "https://multivm.injective.com", # Memindahkan Origin ke akhir
+            "Origin": "https://multivm.injective.com",
         }
-        # Menggabungkan header jika initial_headers disediakan
         if initial_headers:
             self._http_headers.update(initial_headers)
 
-        self.api_base_url = "https://jsbqfdd4yk.execute-api.us-east-1.amazonaws.com/v2" # Mengubah nama variabel
-        self.proxy_list = [] # Mengubah nama variabel
-        self.current_proxy_idx = 0 # Mengubah nama variabel
-        self.account_proxy_mapping = {} # Mengubah nama variabel
+        self.api_base_url = "https://jsbqfdd4yk.execute-api.us-east-1.amazonaws.com/v2"
+        self.proxy_list = []
+        self.current_proxy_idx = 0
+        self.account_proxy_mapping = {}
 
     def log(self, message, level="info"):
         if level == "info":
@@ -132,39 +129,30 @@ class FaucetAutomationCore: # Nama kelas diubah total agar lebih berbeda
                 captcha_key = file.read().strip()
             return captcha_key
         except Exception as e:
-            # Menggunakan logger baru untuk error ini
             self.log(f"Failed to load project_id.txt: {e}", level="error")
             return None
     
     async def load_proxies(self, use_proxy_choice: int):
         filename = "proxy.txt"
         try:
-            if use_proxy_choice == 1:
-                logger.loading("Fetching free proxies from Proxyscrape...")
-                async with ClientSession(timeout=ClientTimeout(total=30)) as session:
-                    async with session.get("https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text") as response:
-                        response.raise_for_status()
-                        content = await response.text()
-                        with open(filename, 'w') as f:
-                            f.write(content)
-                        self.proxy_list = [line.strip() for line in content.splitlines() if line.strip()] # Menggunakan proxy_list
-                logger.success("Free proxies fetched and saved to proxy.txt.")
-            else:
+            # Removed Proxyscrape free proxy option here as per request
+            if use_proxy_choice == 1: # This will now be "Run With Private Proxy"
                 if not os.path.exists(filename):
                     logger.error(f"File {filename} Not Found.")
                     return
                 with open(filename, 'r') as f:
-                    self.proxy_list = [line.strip() for line in f.read().splitlines() if line.strip()] # Menggunakan proxy_list
+                    self.proxy_list = [line.strip() for line in f.read().splitlines() if line.strip()]
             
-            if not self.proxy_list: # Menggunakan proxy_list
-                logger.warn("No Proxies Found.")
+            if not self.proxy_list and use_proxy_choice == 1: # Only warn if private proxy chosen but list is empty
+                logger.warn("No Private Proxies Found in proxy.txt.")
                 return
 
-            logger.info(f"Proxies Total: {len(self.proxy_list)}") # Menggunakan proxy_list
+            if use_proxy_choice == 1: # Only show total if using private proxies
+                logger.info(f"Proxies Total: {len(self.proxy_list)}")
         
         except Exception as e:
             logger.error(f"Failed To Load Proxies: {e}")
-            self.proxy_list = [] # Menggunakan proxy_list
+            self.proxy_list = []
 
     def check_proxy_schemes(self, proxies):
         schemes = ["http://", "https://", "socks4://", "socks5://"]
@@ -173,20 +161,20 @@ class FaucetAutomationCore: # Nama kelas diubah total agar lebih berbeda
         return f"http://{proxies}"
 
     def get_next_proxy_for_account(self, account):
-        if account not in self.account_proxy_mapping: # Menggunakan account_proxy_mapping
-            if not self.proxy_list: # Menggunakan proxy_list
+        if account not in self.account_proxy_mapping:
+            if not self.proxy_list:
                 return None
-            proxy = self.check_proxy_schemes(self.proxy_list[self.current_proxy_idx]) # Menggunakan proxy_list dan current_proxy_idx
-            self.account_proxy_mapping[account] = proxy # Menggunakan account_proxy_mapping
-            self.current_proxy_idx = (self.current_proxy_idx + 1) % len(self.proxy_list) # Menggunakan current_proxy_idx dan proxy_list
-        return self.account_proxy_mapping[account] # Menggunakan account_proxy_mapping
+            proxy = self.check_proxy_schemes(self.proxy_list[self.current_proxy_idx])
+            self.account_proxy_mapping[account] = proxy
+            self.current_proxy_idx = (self.current_proxy_idx + 1) % len(self.proxy_list)
+        return self.account_proxy_mapping[account]
 
     def rotate_proxy_for_account(self, account):
-        if not self.proxy_list: # Menggunakan proxy_list
+        if not self.proxy_list:
             return None
-        proxy = self.check_proxy_schemes(self.proxy_list[self.current_proxy_idx]) # Menggunakan proxy_list dan current_proxy_idx
-        self.account_proxy_mapping[account] = proxy # Menggunakan account_proxy_mapping
-        self.current_proxy_idx = (self.current_proxy_idx + 1) % len(self.proxy_list) # Menggunakan current_proxy_idx dan proxy_list
+        proxy = self.check_proxy_schemes(self.proxy_list[self.current_proxy_idx])
+        self.account_proxy_mapping[account] = proxy
+        self.current_proxy_idx = (self.current_proxy_idx + 1) % len(self.proxy_list)
         return proxy
         
     def generate_address(self, account: str):
@@ -222,26 +210,25 @@ class FaucetAutomationCore: # Nama kelas diubah total agar lebih berbeda
     def print_question(self):
         while True:
             try:
-                print(f"{Colors.WHITE}{Colors.BOLD}1. Run With Proxyscrape Free Proxy{Colors.RESET}")
-                print(f"{Colors.WHITE}{Colors.BOLD}2. Run With Private Proxy{Colors.RESET}")
-                print(f"{Colors.WHITE}{Colors.BOLD}3. Run Without Proxy{Colors.RESET}")
-                choose = int(input(f"{Colors.BLUE}{Colors.BOLD}Choose [1/2/3] -> {Colors.RESET}").strip())
+                # Mengurangi pilihan proxy menjadi 2 saja
+                print(f"{Colors.WHITE}{Colors.BOLD}1. Run With Private Proxy{Colors.RESET}")
+                print(f"{Colors.WHITE}{Colors.BOLD}2. Run Without Proxy{Colors.RESET}")
+                choose = int(input(f"{Colors.BLUE}{Colors.BOLD}Choose [1/2] -> {Colors.RESET}").strip())
 
-                if choose in [1, 2, 3]:
+                if choose in [1, 2]:
                     proxy_type = (
-                        "With Proxyscrape Free" if choose == 1 else 
-                        "With Private" if choose == 2 else 
+                        "With Private" if choose == 1 else 
                         "Without"
                     )
                     logger.info(f"Run {proxy_type} Proxy Selected.")
                     break
                 else:
-                    logger.error("Please enter either 1, 2 or 3.")
+                    logger.error("Please enter either 1 or 2.")
             except ValueError:
-                logger.error("Invalid input. Enter a number (1, 2 or 3).")
+                logger.error("Invalid input. Enter a number (1 or 2).")
 
         rotate = False
-        if choose in [1, 2]:
+        if choose == 1: # Rotate hanya jika memilih Private Proxy
             while True:
                 rotate_input = input(f"{Colors.BLUE}{Colors.BOLD}Rotate Invalid Proxy? [y/n] -> {Colors.RESET}").strip().lower()
 
@@ -265,10 +252,10 @@ class FaucetAutomationCore: # Nama kelas diubah total agar lebih berbeda
             return None
     
     async def claim_faucet(self, address: str, proxy=None, retries=5):
-        url = f"{self.api_base_url}/faucet" # Menggunakan api_base_url
+        url = f"{self.api_base_url}/faucet"
         data = json.dumps({"address": self.generate_inj_address(address)})
         headers = {
-            **self._http_headers, # Menggunakan _http_headers
+            **self._http_headers,
             "Content-Length": str(len(data)),
             "Content-Type": "application/json"
         }
@@ -321,9 +308,9 @@ class FaucetAutomationCore: # Nama kelas diubah total agar lebih berbeda
             if claim:
                 logger.success("Faucet: Claimed Successfully")
 
-    async def run_faucet_bot(self): # Nama method main diubah
+    async def run_faucet_bot(self):
         try:
-            await display_welcome_screen() # Menampilkan welcome screen di awal
+            await display_welcome_screen()
 
             with open('accounts.txt', 'r') as file:
                 accounts = [line.strip() for line in file if line.strip()]
@@ -335,15 +322,17 @@ class FaucetAutomationCore: # Nama kelas diubah total agar lebih berbeda
             use_proxy_choice, rotate_proxy = self.print_question()
 
             use_proxy = False
-            if use_proxy_choice in [1, 2]:
+            # Pilihan 1 sekarang adalah "With Private Proxy"
+            if use_proxy_choice == 1: 
                 use_proxy = True
 
             while True:
-                await display_welcome_screen() # Refresh welcome screen setiap loop
+                await display_welcome_screen()
                 logger.info(f"Account's Total: {len(accounts)}")
 
                 if use_proxy:
-                    await self.load_proxies(use_proxy_choice)
+                    # use_proxy_choice 1 sekarang berarti menggunakan private proxy
+                    await self.load_proxies(use_proxy_choice) 
 
                 for account in accounts:
                     if account:
@@ -356,22 +345,28 @@ class FaucetAutomationCore: # Nama kelas diubah total agar lebih berbeda
                         
                         await self.process_accounts(address, use_proxy, rotate_proxy)
 
-                logger.info("=" * 72)
+                # Pindahkan baris ini agar tidak ditimpa countdown
+                # logger.info("=" * 72) 
                 
                 delay = 12 * 60 * 60
                 while delay > 0:
                     formatted_time = self.format_seconds(delay)
+                    # Tambahkan spasi di akhir untuk membersihkan karakter lama
                     print(
                         f"{Colors.CYAN}{Colors.BOLD}[ Wait for{Colors.RESET}"
                         f"{Colors.WHITE}{Colors.BOLD} {formatted_time} {Colors.RESET}"
                         f"{Colors.CYAN}{Colors.BOLD}... ]{Colors.RESET}"
                         f"{Colors.WHITE}{Colors.BOLD} | {Colors.RESET}"
-                        f"{Colors.YELLOW}{Colors.BOLD}All Accounts Have Been Processed...{Colors.RESET}",
+                        f"{Colors.YELLOW}{Colors.BOLD}All Accounts Have Been Processed...{Colors.RESET}   ", # Added spaces
                         end="\r",
                         flush=True
                     )
                     await asyncio.sleep(1)
                     delay -= 1
+                
+                # Setelah countdown selesai, cetak garis pemisah di baris baru
+                print("\n") # Pindah ke baris baru setelah countdown
+                logger.info("=" * 72) # Cetak garis pemisah
 
         except FileNotFoundError:
             logger.error("File 'accounts.txt' Not Found.")
@@ -380,12 +375,11 @@ class FaucetAutomationCore: # Nama kelas diubah total agar lebih berbeda
             logger.error(f"An unexpected error occurred: {e}")
             raise e
 
-# Mengubah titik masuk (entry point) agar lebih berbeda
 if __name__ == "__main__":
     try:
-        faucet_runner_instance = FaucetAutomationCore() # Menggunakan nama kelas yang baru
-        asyncio.run(faucet_runner_instance.run_faucet_bot()) # Memanggil method yang sudah diganti namanya
+        faucet_runner_instance = FaucetAutomationCore()
+        asyncio.run(faucet_runner_instance.run_faucet_bot())
     except KeyboardInterrupt:
-        logger.info("[ EXIT ] Injective Faucet Bot Terminated.") # Mengubah pesan keluar
+        logger.info("[ EXIT ] Injective Faucet Bot Terminated.")
     except Exception as e:
         logger.error(f"Critical error during bot execution: {e}")
