@@ -25,6 +25,7 @@ class Colors:
     RED = Fore.RED
     CYAN = Fore.CYAN
     MAGENTA = Fore.MAGENTA
+    BLUE = Fore.BLUE  # <--- INI SUDAH DITAMBAHKAN
     WHITE = Fore.WHITE
     BRIGHT_GREEN = Fore.LIGHTGREEN_EX
     BRIGHT_MAGENTA = Fore.LIGHTMAGENTA_EX
@@ -74,28 +75,33 @@ async def display_welcome_screen():
     print(f"{Colors.RESET}")
     await asyncio.sleep(1)
 
-# Changed timezone variable name and how it's defined
-app_timezone = pytz.timezone('Asia/Jakarta')
+# Mengubah nama variabel timezone dan cara definisinya agar lebih berbeda
+eastern_asia_timezone = pytz.timezone('Asia/Jakarta')
 
-class InjectiveClient: # Renamed class to make it more distinct
-    def __init__(self) -> None:
-        # Changed header structure slightly
-        self._request_headers = {
-            "Accept": "application/json, text/plain, */*",
+class FaucetAutomationCore: # Nama kelas diubah total agar lebih berbeda
+    def __init__(self, initial_headers: dict = None) -> None: # Menambahkan parameter opsional
+        # Mengubah struktur dan nama header agar lebih berbeda
+        self._http_headers = {
+            "Accept": "*/*", # Mengubah nilai
             "Accept-Language": "en-US,en;q=0.9",
-            "X-Origin-Host": "https://multivm.injective.com", # Changed from Origin
+            "X-Requested-With": "XMLHttpRequest", # Menambahkan header baru
             "Referer": "https://multivm.injective.com/",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "cross-site",
-            "User-Agent": FakeUserAgent().random
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Dest": "empty",
+            "User-Agent": FakeUserAgent().random,
+            "Origin": "https://multivm.injective.com", # Memindahkan Origin ke akhir
         }
-        self.BASE_API = "https://jsbqfdd4yk.execute-api.us-east-1.amazonaws.com/v2"
-        self.proxies = []
-        self.proxy_index = 0
-        self.account_proxies = {}
+        # Menggabungkan header jika initial_headers disediakan
+        if initial_headers:
+            self._http_headers.update(initial_headers)
 
-    def log(self, message, level="info"): # Modified to use the new logger
+        self.api_base_url = "https://jsbqfdd4yk.execute-api.us-east-1.amazonaws.com/v2" # Mengubah nama variabel
+        self.proxy_list = [] # Mengubah nama variabel
+        self.current_proxy_idx = 0 # Mengubah nama variabel
+        self.account_proxy_mapping = {} # Mengubah nama variabel
+
+    def log(self, message, level="info"):
         if level == "info":
             logger.info(message)
         elif level == "warn":
@@ -113,7 +119,7 @@ class InjectiveClient: # Renamed class to make it more distinct
         elif level == "swapSuccess":
             logger.swapSuccess(message)
         else:
-            print(message, flush=True) # Fallback for unknown levels
+            print(message, flush=True)
 
     def format_seconds(self, seconds):
         hours, remainder = divmod(seconds, 3600)
@@ -126,6 +132,7 @@ class InjectiveClient: # Renamed class to make it more distinct
                 captcha_key = file.read().strip()
             return captcha_key
         except Exception as e:
+            # Menggunakan logger baru untuk error ini
             self.log(f"Failed to load project_id.txt: {e}", level="error")
             return None
     
@@ -140,24 +147,24 @@ class InjectiveClient: # Renamed class to make it more distinct
                         content = await response.text()
                         with open(filename, 'w') as f:
                             f.write(content)
-                        self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
+                        self.proxy_list = [line.strip() for line in content.splitlines() if line.strip()] # Menggunakan proxy_list
                 logger.success("Free proxies fetched and saved to proxy.txt.")
             else:
                 if not os.path.exists(filename):
                     logger.error(f"File {filename} Not Found.")
                     return
                 with open(filename, 'r') as f:
-                    self.proxies = [line.strip() for line in f.read().splitlines() if line.strip()]
+                    self.proxy_list = [line.strip() for line in f.read().splitlines() if line.strip()] # Menggunakan proxy_list
             
-            if not self.proxies:
+            if not self.proxy_list: # Menggunakan proxy_list
                 logger.warn("No Proxies Found.")
                 return
 
-            logger.info(f"Proxies Total: {len(self.proxies)}")
+            logger.info(f"Proxies Total: {len(self.proxy_list)}") # Menggunakan proxy_list
         
         except Exception as e:
             logger.error(f"Failed To Load Proxies: {e}")
-            self.proxies = []
+            self.proxy_list = [] # Menggunakan proxy_list
 
     def check_proxy_schemes(self, proxies):
         schemes = ["http://", "https://", "socks4://", "socks5://"]
@@ -166,20 +173,20 @@ class InjectiveClient: # Renamed class to make it more distinct
         return f"http://{proxies}"
 
     def get_next_proxy_for_account(self, account):
-        if account not in self.account_proxies:
-            if not self.proxies:
+        if account not in self.account_proxy_mapping: # Menggunakan account_proxy_mapping
+            if not self.proxy_list: # Menggunakan proxy_list
                 return None
-            proxy = self.check_proxy_schemes(self.proxies[self.proxy_index])
-            self.account_proxies[account] = proxy
-            self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
-        return self.account_proxies[account]
+            proxy = self.check_proxy_schemes(self.proxy_list[self.current_proxy_idx]) # Menggunakan proxy_list dan current_proxy_idx
+            self.account_proxy_mapping[account] = proxy # Menggunakan account_proxy_mapping
+            self.current_proxy_idx = (self.current_proxy_idx + 1) % len(self.proxy_list) # Menggunakan current_proxy_idx dan proxy_list
+        return self.account_proxy_mapping[account] # Menggunakan account_proxy_mapping
 
     def rotate_proxy_for_account(self, account):
-        if not self.proxies:
+        if not self.proxy_list: # Menggunakan proxy_list
             return None
-        proxy = self.check_proxy_schemes(self.proxies[self.proxy_index])
-        self.account_proxies[account] = proxy
-        self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
+        proxy = self.check_proxy_schemes(self.proxy_list[self.current_proxy_idx]) # Menggunakan proxy_list dan current_proxy_idx
+        self.account_proxy_mapping[account] = proxy # Menggunakan account_proxy_mapping
+        self.current_proxy_idx = (self.current_proxy_idx + 1) % len(self.proxy_list) # Menggunakan current_proxy_idx dan proxy_list
         return proxy
         
     def generate_address(self, account: str):
@@ -258,10 +265,10 @@ class InjectiveClient: # Renamed class to make it more distinct
             return None
     
     async def claim_faucet(self, address: str, proxy=None, retries=5):
-        url = f"{self.BASE_API}/faucet"
+        url = f"{self.api_base_url}/faucet" # Menggunakan api_base_url
         data = json.dumps({"address": self.generate_inj_address(address)})
         headers = {
-            **self._request_headers, # Using the renamed headers variable
+            **self._http_headers, # Menggunakan _http_headers
             "Content-Length": str(len(data)),
             "Content-Type": "application/json"
         }
@@ -314,9 +321,9 @@ class InjectiveClient: # Renamed class to make it more distinct
             if claim:
                 logger.success("Faucet: Claimed Successfully")
 
-    async def run_faucet_bot(self): # Renamed main method
+    async def run_faucet_bot(self): # Nama method main diubah
         try:
-            await display_welcome_screen() # Display welcome screen at the start
+            await display_welcome_screen() # Menampilkan welcome screen di awal
 
             with open('accounts.txt', 'r') as file:
                 accounts = [line.strip() for line in file if line.strip()]
@@ -332,7 +339,7 @@ class InjectiveClient: # Renamed class to make it more distinct
                 use_proxy = True
 
             while True:
-                await display_welcome_screen() # Refresh welcome screen each loop
+                await display_welcome_screen() # Refresh welcome screen setiap loop
                 logger.info(f"Account's Total: {len(accounts)}")
 
                 if use_proxy:
@@ -373,12 +380,12 @@ class InjectiveClient: # Renamed class to make it more distinct
             logger.error(f"An unexpected error occurred: {e}")
             raise e
 
-# Changed the entry point to be more distinct
+# Mengubah titik masuk (entry point) agar lebih berbeda
 if __name__ == "__main__":
     try:
-        faucet_runner = InjectiveClient() # Instantiated with new class name
-        asyncio.run(faucet_runner.run_faucet_bot()) # Called the renamed main method
+        faucet_runner_instance = FaucetAutomationCore() # Menggunakan nama kelas yang baru
+        asyncio.run(faucet_runner_instance.run_faucet_bot()) # Memanggil method yang sudah diganti namanya
     except KeyboardInterrupt:
-        logger.info("[ EXIT ] Injective Faucet Bot Terminated.") # Changed exit message
+        logger.info("[ EXIT ] Injective Faucet Bot Terminated.") # Mengubah pesan keluar
     except Exception as e:
         logger.error(f"Critical error during bot execution: {e}")
