@@ -97,6 +97,7 @@ class FaucetAutomationCore:
         self.proxy_list = []
         self.current_proxy_idx = 0
         self.account_proxy_mapping = {}
+        self.project_id = None # Inisialisasi project_id di sini
 
     def log(self, message, level="info"):
         if level == "info":
@@ -258,11 +259,19 @@ class FaucetAutomationCore:
     async def claim_faucet(self, address: str, proxy=None, retries=5):
         url = f"{self.api_base_url}/faucet"
         data = json.dumps({"address": self.generate_inj_address(address)})
+        
+        # Inisialisasi headers dengan _http_headers
         headers = {
             **self._http_headers,
             "Content-Length": str(len(data)),
             "Content-Type": "application/json"
         }
+        
+        # Tambahkan project_id (captcha key) ke header jika tersedia
+        if self.project_id:
+            headers["X-Injective-Grecaptcha-Token"] = self.project_id # Asumsi nama header
+            logger.info(f"Adding CAPTCHA token to headers.") # Logging untuk debug
+
         for attempt in range(retries):
             connector = ProxyConnector.from_url(proxy) if proxy else None
             try:
@@ -308,7 +317,6 @@ class FaucetAutomationCore:
         # Tambahkan pemeriksaan di sini untuk alamat yang tidak valid
         if not address:
             logger.error("Invalid Private Key or Library Version Not Supported")
-            # Tidak perlu `continue` di sini karena ini sudah di dalam proses_accounts
             return 
 
         logger.step(f"Processing account: {self.mask_account(address)}")
@@ -328,9 +336,10 @@ class FaucetAutomationCore:
             with open('accounts.txt', 'r') as file:
                 accounts = [line.strip() for line in file if line.strip()]
 
+            # Panggil load_project_id untuk memuat CAPTCHA key
             project_id = self.load_project_id()
             if project_id:
-                self.project_id = project_id
+                self.project_id = project_id # Simpan CAPTCHA key ke instance bot
 
             use_proxy_choice, rotate_proxy = self.print_question()
 
@@ -345,33 +354,26 @@ class FaucetAutomationCore:
                 if use_proxy:
                     await self.load_proxies(use_proxy_choice) 
                 
-                # Menggunakan account_private_key sebagai input ke process_accounts
                 for account_private_key in accounts: 
                     await self.process_accounts(account_private_key, use_proxy, rotate_proxy)
 
-
-                # Pindahkan baris ini agar tidak ditimpa countdown
-                # logger.info("=" * 72) 
-                
                 delay = 12 * 60 * 60
                 while delay > 0:
                     formatted_time = self.format_seconds(delay)
-                    # Tambahkan spasi yang cukup di akhir untuk membersihkan karakter lama
                     print(
                         f"{Colors.CYAN}{Colors.BOLD}[ Wait for{Colors.RESET}"
                         f"{Colors.WHITE}{Colors.BOLD} {formatted_time} {Colors.RESET}"
                         f"{Colors.CYAN}{Colors.BOLD}... ]{Colors.RESET}"
                         f"{Colors.WHITE}{Colors.BOLD} | {Colors.RESET}"
-                        f"{Colors.YELLOW}{Colors.BOLD}All Accounts Have Been Processed...{Colors.RESET}       ", # Added more spaces
+                        f"{Colors.YELLOW}{Colors.BOLD}All Accounts Have Been Processed...{Colors.RESET}       ",
                         end="\r",
                         flush=True
                     )
                     await asyncio.sleep(1)
                     delay -= 1
                 
-                # Setelah countdown selesai, cetak garis pemisah di baris baru
-                print("\n") # Pindah ke baris baru setelah countdown
-                logger.info("=" * 72) # Cetak garis pemisah
+                print("\n")
+                logger.info("=" * 72)
 
         except FileNotFoundError:
             logger.error("File 'accounts.txt' Not Found.")
