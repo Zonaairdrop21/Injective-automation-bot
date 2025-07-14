@@ -1,0 +1,384 @@
+from aiohttp import (
+    ClientResponseError,
+    ClientSession,
+    ClientTimeout
+)
+from aiohttp_socks import ProxyConnector
+from fake_useragent import FakeUserAgent
+from bech32 import bech32_encode, convertbits
+from eth_account import Account
+from datetime import datetime
+from colorama import init, Fore, Style
+import asyncio, json, os, pytz
+from dotenv import load_dotenv
+
+# Initialize colorama for auto-resetting colors
+init(autoreset=True)
+load_dotenv()
+
+# === Terminal Color Setup ===
+class Colors:
+    RESET = Style.RESET_ALL
+    BOLD = Style.BRIGHT
+    GREEN = Fore.GREEN
+    YELLOW = Fore.YELLOW
+    RED = Fore.RED
+    CYAN = Fore.CYAN
+    MAGENTA = Fore.MAGENTA
+    WHITE = Fore.WHITE
+    BRIGHT_GREEN = Fore.LIGHTGREEN_EX
+    BRIGHT_MAGENTA = Fore.LIGHTMAGENTA_EX
+    BRIGHT_WHITE = Fore.LIGHTWHITE_EX
+    BRIGHT_BLACK = Fore.LIGHTBLACK_EX
+
+class Logger:
+    @staticmethod
+    def log(label, symbol, msg, color):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"{Colors.BRIGHT_BLACK}[{timestamp}]{Colors.RESET} {color}[{symbol}] {msg}{Colors.RESET}")
+
+    @staticmethod
+    def info(msg): Logger.log("INFO", "✓", msg, Colors.GREEN)
+    @staticmethod
+    def warn(msg): Logger.log("WARN", "!", msg, Colors.YELLOW)
+    @staticmethod
+    def error(msg): Logger.log("ERR", "✗", msg, Colors.RED)
+    @staticmethod
+    def success(msg): Logger.log("OK", "+", msg, Colors.GREEN)
+    @staticmethod
+    def loading(msg): Logger.log("LOAD", "⟳", msg, Colors.CYAN)
+    @staticmethod
+    def step(msg): Logger.log("STEP", "➤", msg, Colors.WHITE)
+    @staticmethod
+    def swap(msg): Logger.log("SWAP", "↪️", msg, Colors.CYAN)
+    @staticmethod
+    def swapSuccess(msg): Logger.log("SWAP", "✅", msg, Colors.GREEN)
+
+logger = Logger()
+
+def clear_console():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+async def display_welcome_screen():
+    clear_console()
+    now = datetime.now()
+    print(f"{Colors.BRIGHT_GREEN}{Colors.BOLD}")
+    print("  ╔══════════════════════════════════════╗")
+    print("  ║         D Z A P   B O T              ║")
+    print("  ║                                      ║")
+    print(f"  ║       {Colors.YELLOW}{now.strftime('%H:%M:%S %d.%m.%Y')}{Colors.BRIGHT_GREEN}         ║")
+    print("  ║                                      ║")
+    print("  ║       MONAD TESTNET AUTOMATION       ║")
+    print(f"  ║   {Colors.BRIGHT_WHITE}ZonaAirdrop{Colors.BRIGHT_GREEN}  |  t.me/ZonaAirdr0p   ║")
+    print("  ╚══════════════════════════════════════╝")
+    print(f"{Colors.RESET}")
+    await asyncio.sleep(1)
+
+# Changed timezone variable name and how it's defined
+app_timezone = pytz.timezone('Asia/Jakarta')
+
+class InjectiveClient: # Renamed class to make it more distinct
+    def __init__(self) -> None:
+        # Changed header structure slightly
+        self._request_headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "X-Origin-Host": "https://multivm.injective.com", # Changed from Origin
+            "Referer": "https://multivm.injective.com/",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "cross-site",
+            "User-Agent": FakeUserAgent().random
+        }
+        self.BASE_API = "https://jsbqfdd4yk.execute-api.us-east-1.amazonaws.com/v2"
+        self.proxies = []
+        self.proxy_index = 0
+        self.account_proxies = {}
+
+    def log(self, message, level="info"): # Modified to use the new logger
+        if level == "info":
+            logger.info(message)
+        elif level == "warn":
+            logger.warn(message)
+        elif level == "error":
+            logger.error(message)
+        elif level == "success":
+            logger.success(message)
+        elif level == "loading":
+            logger.loading(message)
+        elif level == "step":
+            logger.step(message)
+        elif level == "swap":
+            logger.swap(message)
+        elif level == "swapSuccess":
+            logger.swapSuccess(message)
+        else:
+            print(message, flush=True) # Fallback for unknown levels
+
+    def format_seconds(self, seconds):
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+    
+    def load_project_id(self):
+        try:
+            with open("project_id.txt", 'r') as file:
+                captcha_key = file.read().strip()
+            return captcha_key
+        except Exception as e:
+            self.log(f"Failed to load project_id.txt: {e}", level="error")
+            return None
+    
+    async def load_proxies(self, use_proxy_choice: int):
+        filename = "proxy.txt"
+        try:
+            if use_proxy_choice == 1:
+                logger.loading("Fetching free proxies from Proxyscrape...")
+                async with ClientSession(timeout=ClientTimeout(total=30)) as session:
+                    async with session.get("https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text") as response:
+                        response.raise_for_status()
+                        content = await response.text()
+                        with open(filename, 'w') as f:
+                            f.write(content)
+                        self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
+                logger.success("Free proxies fetched and saved to proxy.txt.")
+            else:
+                if not os.path.exists(filename):
+                    logger.error(f"File {filename} Not Found.")
+                    return
+                with open(filename, 'r') as f:
+                    self.proxies = [line.strip() for line in f.read().splitlines() if line.strip()]
+            
+            if not self.proxies:
+                logger.warn("No Proxies Found.")
+                return
+
+            logger.info(f"Proxies Total: {len(self.proxies)}")
+        
+        except Exception as e:
+            logger.error(f"Failed To Load Proxies: {e}")
+            self.proxies = []
+
+    def check_proxy_schemes(self, proxies):
+        schemes = ["http://", "https://", "socks4://", "socks5://"]
+        if any(proxies.startswith(scheme) for scheme in schemes):
+            return proxies
+        return f"http://{proxies}"
+
+    def get_next_proxy_for_account(self, account):
+        if account not in self.account_proxies:
+            if not self.proxies:
+                return None
+            proxy = self.check_proxy_schemes(self.proxies[self.proxy_index])
+            self.account_proxies[account] = proxy
+            self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
+        return self.account_proxies[account]
+
+    def rotate_proxy_for_account(self, account):
+        if not self.proxies:
+            return None
+        proxy = self.check_proxy_schemes(self.proxies[self.proxy_index])
+        self.account_proxies[account] = proxy
+        self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
+        return proxy
+        
+    def generate_address(self, account: str):
+        try:
+            account_obj = Account.from_key(account)
+            address = account_obj.address
+            return address
+        except Exception as e:
+            logger.error(f"Error generating address: {e}")
+            return None
+    
+    def mask_account(self, account):
+        try:
+            mask_account = account[:6] + '*' * 6 + account[-6:]
+            return mask_account
+        except Exception as e:
+            logger.error(f"Error masking account: {e}")
+            return None
+
+    def generate_inj_address(self, address: str):
+        try:
+            if not address.startswith("0x") or len(address) != 42:
+                raise ValueError("Invalid Ethereum address")
+
+            evm_bytes = bytes.fromhex(address[2:])
+            bech32_words = convertbits(evm_bytes, 8, 5)
+            injective_address = bech32_encode("inj", bech32_words)
+
+            return injective_address
+        except Exception as e:
+            raise Exception(f"Generate Injective Address Failed: {str(e)}")
+
+    def print_question(self):
+        while True:
+            try:
+                print(f"{Colors.WHITE}{Colors.BOLD}1. Run With Proxyscrape Free Proxy{Colors.RESET}")
+                print(f"{Colors.WHITE}{Colors.BOLD}2. Run With Private Proxy{Colors.RESET}")
+                print(f"{Colors.WHITE}{Colors.BOLD}3. Run Without Proxy{Colors.RESET}")
+                choose = int(input(f"{Colors.BLUE}{Colors.BOLD}Choose [1/2/3] -> {Colors.RESET}").strip())
+
+                if choose in [1, 2, 3]:
+                    proxy_type = (
+                        "With Proxyscrape Free" if choose == 1 else 
+                        "With Private" if choose == 2 else 
+                        "Without"
+                    )
+                    logger.info(f"Run {proxy_type} Proxy Selected.")
+                    break
+                else:
+                    logger.error("Please enter either 1, 2 or 3.")
+            except ValueError:
+                logger.error("Invalid input. Enter a number (1, 2 or 3).")
+
+        rotate = False
+        if choose in [1, 2]:
+            while True:
+                rotate_input = input(f"{Colors.BLUE}{Colors.BOLD}Rotate Invalid Proxy? [y/n] -> {Colors.RESET}").strip().lower()
+
+                if rotate_input in ["y", "n"]:
+                    rotate = rotate_input == "y"
+                    break
+                else:
+                    logger.error("Invalid input. Enter 'y' or 'n'.")
+
+        return choose, rotate
+    
+    async def check_connection(self, proxy=None):
+        connector = ProxyConnector.from_url(proxy) if proxy else None
+        try:
+            async with ClientSession(connector=connector, timeout=ClientTimeout(total=30)) as session:
+                async with session.post(url="http://ip-api.com/json") as response:
+                    response.raise_for_status()
+                    return await response.json()
+        except (Exception, ClientResponseError) as e:
+            logger.warn(f"Connection Not 200 OK - {str(e)}")
+            return None
+    
+    async def claim_faucet(self, address: str, proxy=None, retries=5):
+        url = f"{self.BASE_API}/faucet"
+        data = json.dumps({"address": self.generate_inj_address(address)})
+        headers = {
+            **self._request_headers, # Using the renamed headers variable
+            "Content-Length": str(len(data)),
+            "Content-Type": "application/json"
+        }
+        for attempt in range(retries):
+            connector = ProxyConnector.from_url(proxy) if proxy else None
+            try:
+                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
+                    async with session.post(url=url, headers=headers, data=data, ssl=False) as response:
+                        if response.status == 400:
+                            logger.warn("Faucet: Already Claimed")
+                            return None
+                        response.raise_for_status()
+                        return await response.text()
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    logger.warn(f"Faucet: Claim attempt {attempt + 1} failed. Retrying in 5 seconds. Error: {str(e)}")
+                    await asyncio.sleep(5)
+                    continue
+                logger.error(f"Faucet: Not Claimed - {str(e)}")
+        return None
+
+    async def process_check_connection(self, address: str, use_proxy: bool, rotate_proxy: bool):
+        while True:
+            proxy = self.get_next_proxy_for_account(address) if use_proxy else None
+            if proxy:
+                logger.step(f"Using proxy: {proxy}")
+            else:
+                logger.step("No proxy being used.")
+
+            check = await self.check_connection(proxy)
+            if check and check.get("status") == "success":
+                logger.success("Connection check successful.")
+                return True
+            
+            if rotate_proxy:
+                logger.warn("Connection check failed. Rotating proxy...")
+                proxy = self.rotate_proxy_for_account(address)
+                await asyncio.sleep(5)
+                continue
+            else:
+                logger.error("Connection check failed. Not rotating proxy.")
+            return False
+        
+    async def process_accounts(self, address: str, use_proxy: bool, rotate_proxy: bool):
+        is_valid = await self.process_check_connection(address, use_proxy, rotate_proxy)
+        if is_valid:
+            proxy = self.get_next_proxy_for_account(address) if use_proxy else None
+            logger.loading("Attempting to claim faucet...")
+            claim = await self.claim_faucet(address, proxy)
+            if claim:
+                logger.success("Faucet: Claimed Successfully")
+
+    async def run_faucet_bot(self): # Renamed main method
+        try:
+            await display_welcome_screen() # Display welcome screen at the start
+
+            with open('accounts.txt', 'r') as file:
+                accounts = [line.strip() for line in file if line.strip()]
+
+            project_id = self.load_project_id()
+            if project_id:
+                self.project_id = project_id
+
+            use_proxy_choice, rotate_proxy = self.print_question()
+
+            use_proxy = False
+            if use_proxy_choice in [1, 2]:
+                use_proxy = True
+
+            while True:
+                await display_welcome_screen() # Refresh welcome screen each loop
+                logger.info(f"Account's Total: {len(accounts)}")
+
+                if use_proxy:
+                    await self.load_proxies(use_proxy_choice)
+
+                for account in accounts:
+                    if account:
+                        address = self.generate_address(account)
+                        logger.step(f"Processing account: {self.mask_account(address)}")
+
+                        if not address:
+                            logger.error("Invalid Private Key or Library Version Not Supported")
+                            continue
+                        
+                        await self.process_accounts(address, use_proxy, rotate_proxy)
+
+                logger.info("=" * 72)
+                
+                delay = 12 * 60 * 60
+                while delay > 0:
+                    formatted_time = self.format_seconds(delay)
+                    print(
+                        f"{Colors.CYAN}{Colors.BOLD}[ Wait for{Colors.RESET}"
+                        f"{Colors.WHITE}{Colors.BOLD} {formatted_time} {Colors.RESET}"
+                        f"{Colors.CYAN}{Colors.BOLD}... ]{Colors.RESET}"
+                        f"{Colors.WHITE}{Colors.BOLD} | {Colors.RESET}"
+                        f"{Colors.YELLOW}{Colors.BOLD}All Accounts Have Been Processed...{Colors.RESET}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(1)
+                    delay -= 1
+
+        except FileNotFoundError:
+            logger.error("File 'accounts.txt' Not Found.")
+            return
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {e}")
+            raise e
+
+# Changed the entry point to be more distinct
+if __name__ == "__main__":
+    try:
+        faucet_runner = InjectiveClient() # Instantiated with new class name
+        asyncio.run(faucet_runner.run_faucet_bot()) # Called the renamed main method
+    except KeyboardInterrupt:
+        logger.info("[ EXIT ] Injective Faucet Bot Terminated.") # Changed exit message
+    except Exception as e:
+        logger.error(f"Critical error during bot execution: {e}")
