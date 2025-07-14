@@ -8,116 +8,55 @@ from fake_useragent import FakeUserAgent
 from bech32 import bech32_encode, convertbits
 from eth_account import Account
 from datetime import datetime
-from colorama import init, Fore, Style
+from colorama import *
 import asyncio, json, os, pytz
-from dotenv import load_dotenv
 
-# Initialize colorama for auto-resetting colors
-init(autoreset=True)
-load_dotenv()
+wib = pytz.timezone('Asia/Jakarta')
 
-# === Terminal Color Setup ===
-class Colors:
-    RESET = Style.RESET_ALL
-    BOLD = Style.BRIGHT
-    GREEN = Fore.GREEN
-    YELLOW = Fore.YELLOW
-    RED = Fore.RED
-    CYAN = Fore.CYAN
-    MAGENTA = Fore.MAGENTA
-    BLUE = Fore.BLUE
-    WHITE = Fore.WHITE
-    BRIGHT_GREEN = Fore.LIGHTGREEN_EX
-    BRIGHT_MAGENTA = Fore.LIGHTMAGENTA_EX
-    BRIGHT_WHITE = Fore.LIGHTWHITE_EX
-    BRIGHT_BLACK = Fore.LIGHTBLACK_EX
-
-class Logger:
-    @staticmethod
-    def log(label, symbol, msg, color):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"{Colors.BRIGHT_BLACK}[{timestamp}]{Colors.RESET} {color}[{symbol}] {msg}{Colors.RESET}")
-
-    @staticmethod
-    def info(msg): Logger.log("INFO", "✓", msg, Colors.GREEN)
-    @staticmethod
-    def warn(msg): Logger.log("WARN", "!", msg, Colors.YELLOW)
-    @staticmethod
-    def error(msg): Logger.log("ERR", "✗", msg, Colors.RED)
-    @staticmethod
-    def success(msg): Logger.log("OK", "+", msg, Colors.GREEN)
-    @staticmethod
-    def loading(msg): Logger.log("LOAD", "⟳", msg, Colors.CYAN)
-    @staticmethod
-    def step(msg): Logger.log("STEP", "➤", msg, Colors.WHITE)
-    @staticmethod
-    def swap(msg): Logger.log("SWAP", "↪️", msg, Colors.CYAN)
-    @staticmethod
-    def swapSuccess(msg): Logger.log("SWAP", "✅", msg, Colors.GREEN)
-
-logger = Logger()
-
-def clear_console():
-    os.system('cls' if os.name == 'nt' else 'clear')
-
-async def display_welcome_screen():
-    clear_console()
-    now = datetime.now()
-    print(f"{Colors.BRIGHT_GREEN}{Colors.BOLD}")
-    print("  ╔══════════════════════════════════════╗")
-    print("  ║         D Z A P   B O T              ║")
-    print("  ║                                      ║")
-    print(f"  ║       {Colors.YELLOW}{now.strftime('%H:%M:%S %d.%m.%Y')}{Colors.BRIGHT_GREEN}         ║")
-    print("  ║                                      ║")
-    print("  ║       MONAD TESTNET AUTOMATION       ║")
-    print(f"  ║   {Colors.BRIGHT_WHITE}ZonaAirdrop{Colors.BRIGHT_GREEN}  |  t.me/ZonaAirdr0p   ║")
-    print("  ╚══════════════════════════════════════╝")
-    print(f"{Colors.RESET}")
-    await asyncio.sleep(1)
-
-eastern_asia_timezone = pytz.timezone('Asia/Jakarta')
-
-class FaucetAutomationCore:
-    def __init__(self, initial_headers: dict = None) -> None:
-        self._http_headers = {
-            "Accept": "*/*",
+class Injective:
+    def __init__(self) -> None:
+        self.headers = {
+            "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
-            "X-Requested-With": "XMLHttpRequest",
-            "Referer": "https://multivm.injective.com/",
-            "Sec-Fetch-Site": "cross-site",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Dest": "empty",
-            "User-Agent": FakeUserAgent().random,
             "Origin": "https://multivm.injective.com",
+            "Referer": "https://multivm.injective.com/",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "cross-site",
+            "User-Agent": FakeUserAgent().random
         }
-        if initial_headers:
-            self._http_headers.update(initial_headers)
+        self.BASE_API = "https://jsbqfdd4yk.execute-api.us-east-1.amazonaws.com/v2"
+        self.proxies = []
+        self.proxy_index = 0
+        self.account_proxies = {}
+        self.project_id = None # Tambahkan inisialisasi project_id
 
-        self.api_base_url = "https://jsbqfdd4yk.execute-api.us-east-1.amazonaws.com/v2"
-        self.proxy_list = []
-        self.current_proxy_idx = 0
-        self.account_proxy_mapping = {}
-        self.project_id = None
+    def clear_terminal(self):
+        os.system('cls' if os.name == 'nt' else 'clear')
 
-    def log(self, message, level="info"):
-        if level == "info":
-            logger.info(message)
-        elif level == "warn":
-            logger.warn(message)
-        elif level == "error":
-            logger.error(message)
-        elif level == "success":
-            logger.success(message)
-        elif level == "loading":
-            logger.loading(message)
-        elif level == "step":
-            logger.step(message)
-        elif level == "swap":
-            logger.swap(message)
-        elif level == "swapSuccess":
-            logger.swapSuccess(message)
+    # Modifikasi fungsi log agar bisa menerima do_print_newline
+    def log(self, message, do_print_newline=True, end_char="\n"):
+        timestamp = datetime.now().astimezone(wib).strftime('%x %X %Z')
+        log_message = (
+            f"{Fore.CYAN + Style.BRIGHT}[ {timestamp} ]{Style.RESET_ALL}"
+            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}{message}"
+        )
+        if do_print_newline:
+            print(log_message, flush=True, end=end_char)
         else:
-            print(message, flush=True)
+            # Hapus baris sebelum mencetak ulang untuk update di tempat
+            print(f"\r{' ' * 200}\r{log_message}", flush=True, end=end_char)
+
+
+    def welcome(self):
+        print(
+            f"""
+        {Fore.GREEN + Style.BRIGHT}Auto Claim Faucet {Fore.BLUE + Style.BRIGHT}Injective - BOT
+            """
+            f"""
+        {Fore.GREEN + Style.BRIGHT}Rey? {Fore.YELLOW + Style.BRIGHT}<INI WATERMARK>
+            """
+        )
 
     def format_seconds(self, seconds):
         hours, remainder = divmod(seconds, 3600)
@@ -128,31 +67,42 @@ class FaucetAutomationCore:
         try:
             with open("project_id.txt", 'r') as file:
                 captcha_key = file.read().strip()
+
             return captcha_key
         except Exception as e:
-            self.log(f"Failed to load project_id.txt: {e}", level="error")
+            self.log(f"{Fore.RED + Style.BRIGHT}Failed to load project_id.txt: {e}{Style.RESET_ALL}")
             return None
     
     async def load_proxies(self, use_proxy_choice: int):
         filename = "proxy.txt"
         try:
             if use_proxy_choice == 1:
+                async with ClientSession(timeout=ClientTimeout(total=30)) as session:
+                    async with session.get("https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text") as response:
+                        response.raise_for_status()
+                        content = await response.text()
+                        with open(filename, 'w') as f:
+                            f.write(content)
+                        self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
+            else:
                 if not os.path.exists(filename):
-                    logger.error(f"File {filename} Not Found.")
+                    self.log(f"{Fore.RED + Style.BRIGHT}File {filename} Not Found.{Style.RESET_ALL}")
                     return
                 with open(filename, 'r') as f:
-                    self.proxy_list = [line.strip() for line in f.read().splitlines() if line.strip()]
+                    self.proxies = [line.strip() for line in f.read().splitlines() if line.strip()]
             
-            if not self.proxy_list and use_proxy_choice == 1:
-                logger.warn("No Private Proxies Found in proxy.txt.")
+            if not self.proxies:
+                self.log(f"{Fore.RED + Style.BRIGHT}No Proxies Found.{Style.RESET_ALL}")
                 return
 
-            if use_proxy_choice == 1:
-                logger.info(f"Proxies Total: {len(self.proxy_list)}")
+            self.log(
+                f"{Fore.GREEN + Style.BRIGHT}Proxies Total  : {Style.RESET_ALL}"
+                f"{Fore.WHITE + Style.BRIGHT}{len(self.proxies)}{Style.RESET_ALL}"
+            )
         
         except Exception as e:
-            logger.error(f"Failed To Load Proxies: {e}")
-            self.proxy_list = []
+            self.log(f"{Fore.RED + Style.BRIGHT}Failed To Load Proxies: {e}{Style.RESET_ALL}")
+            self.proxies = []
 
     def check_proxy_schemes(self, proxies):
         schemes = ["http://", "https://", "socks4://", "socks5://"]
@@ -161,20 +111,20 @@ class FaucetAutomationCore:
         return f"http://{proxies}"
 
     def get_next_proxy_for_account(self, account):
-        if account not in self.account_proxy_mapping:
-            if not self.proxy_list:
+        if account not in self.account_proxies:
+            if not self.proxies:
                 return None
-            proxy = self.check_proxy_schemes(self.proxy_list[self.current_proxy_idx])
-            self.account_proxy_mapping[account] = proxy
-            self.current_proxy_idx = (self.current_proxy_idx + 1) % len(self.proxy_list)
-        return self.account_proxy_mapping[account]
+            proxy = self.check_proxy_schemes(self.proxies[self.proxy_index])
+            self.account_proxies[account] = proxy
+            self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
+        return self.account_proxies[account]
 
     def rotate_proxy_for_account(self, account):
-        if not self.proxy_list:
+        if not self.proxies:
             return None
-        proxy = self.check_proxy_schemes(self.proxy_list[self.current_proxy_idx])
-        self.account_proxy_mapping[account] = proxy
-        self.current_proxy_idx = (self.current_proxy_idx + 1) % len(self.proxy_list)
+        proxy = self.check_proxy_schemes(self.proxies[self.proxy_index])
+        self.account_proxies[account] = proxy
+        self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
         return proxy
         
     def generate_address(self, account_private_key: str):
@@ -183,18 +133,19 @@ class FaucetAutomationCore:
             address = account_obj.address
             return address
         except Exception as e:
-            logger.error(f"Error generating address: {e}")
+            self.log(f"{Fore.RED + Style.BRIGHT}Error generating address: {e}{Style.RESET_ALL}")
             return None
     
-    def mask_account(self, address: str):
-        if address is None:
-            return "None"
+    def mask_account(self, account):
         try:
-            mask_address = address[:6] + '*' * 6 + address[-6:]
-            return mask_address
+            if account is None: # Pastikan account bukan None
+                return "None"
+            mask_account = account[:6] + '*' * 6 + account[-6:]
+            return mask_account
         except Exception as e:
-            logger.error(f"Error masking account: {e}")
+            self.log(f"{Fore.RED + Style.BRIGHT}Error masking account: {e}{Style.RESET_ALL}")
             return "Error Masking"
+
 
     def generate_inj_address(self, address: str):
         try:
@@ -212,32 +163,34 @@ class FaucetAutomationCore:
     def print_question(self):
         while True:
             try:
-                print(f"{Colors.WHITE}{Colors.BOLD}1. Run With Private Proxy{Colors.RESET}")
-                print(f"{Colors.WHITE}{Colors.BOLD}2. Run Without Proxy{Colors.RESET}")
-                choose = int(input(f"{Colors.BLUE}{Colors.BOLD}Choose [1/2] -> {Colors.RESET}").strip())
+                print(f"{Fore.WHITE + Style.BRIGHT}1. Run With Proxyscrape Free Proxy{Style.RESET_ALL}")
+                print(f"{Fore.WHITE + Style.BRIGHT}2. Run With Private Proxy{Style.RESET_ALL}")
+                print(f"{Fore.WHITE + Style.BRIGHT}3. Run Without Proxy{Style.RESET_ALL}")
+                choose = int(input(f"{Fore.BLUE + Style.BRIGHT}Choose [1/2/3] -> {Style.RESET_ALL}").strip())
 
-                if choose in [1, 2]:
+                if choose in [1, 2, 3]:
                     proxy_type = (
-                        "With Private" if choose == 1 else 
+                        "With Proxyscrape Free" if choose == 1 else 
+                        "With Private" if choose == 2 else 
                         "Without"
                     )
-                    logger.info(f"Run {proxy_type} Proxy Selected.")
+                    self.log(f"{Fore.GREEN + Style.BRIGHT}Run {proxy_type} Proxy Selected.{Style.RESET_ALL}")
                     break
                 else:
-                    logger.error("Please enter either 1 or 2.")
+                    self.log(f"{Fore.RED + Style.BRIGHT}Please enter either 1, 2 or 3.{Style.RESET_ALL}")
             except ValueError:
-                logger.error("Invalid input. Enter a number (1 or 2).")
+                self.log(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter a number (1, 2 or 3).{Style.RESET_ALL}")
 
         rotate = False
-        if choose == 1:
+        if choose in [1, 2]:
             while True:
-                rotate_input = input(f"{Colors.BLUE}{Colors.BOLD}Rotate Invalid Proxy? [y/n] -> {Colors.RESET}").strip().lower()
+                rotate_input = input(f"{Fore.BLUE + Style.BRIGHT}Rotate Invalid Proxy? [y/n] -> {Style.RESET_ALL}").strip().lower() # Ubah nama variabel agar tidak tumpang tindih
 
                 if rotate_input in ["y", "n"]:
                     rotate = rotate_input == "y"
                     break
                 else:
-                    logger.error("Invalid input. Enter 'y' or 'n'.")
+                    self.log(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter 'y' or 'n'.{Style.RESET_ALL}")
 
         return choose, rotate
     
@@ -249,22 +202,27 @@ class FaucetAutomationCore:
                     response.raise_for_status()
                     return await response.json()
         except (Exception, ClientResponseError) as e:
-            logger.warn(f"Connection Not 200 OK - {str(e)}")
+            self.log(
+                f"{Fore.CYAN + Style.BRIGHT}Status:{Style.RESET_ALL}"
+                f"{Fore.RED + Style.BRIGHT} Connection Not 200 OK {Style.RESET_ALL}"
+                f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
+                f"{Fore.YELLOW + Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+            )
             return None
     
     async def claim_faucet(self, address: str, proxy=None, retries=5):
-        url = f"{self.api_base_url}/faucet"
-        data = json.dumps({"address": self.generate_inj_address(address)})
-        
+        url = f"{self.BASE_API}/faucet"
+        data = json.dumps({"address":self.generate_inj_address(address)})
         headers = {
-            **self._http_headers,
+            **self.headers,
             "Content-Length": str(len(data)),
             "Content-Type": "application/json"
         }
-        
+        # Tambahkan project_id (captcha key) ke header jika tersedia
         if self.project_id:
             headers["X-Injective-Grecaptcha-Token"] = self.project_id
-            logger.info(f"Adding CAPTCHA token to headers.")
+            self.log(f"{Fore.MAGENTA + Style.BRIGHT}Adding CAPTCHA token to headers.{Style.RESET_ALL}")
+
 
         for attempt in range(retries):
             connector = ProxyConnector.from_url(proxy) if proxy else None
@@ -272,60 +230,74 @@ class FaucetAutomationCore:
                 async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
                     async with session.post(url=url, headers=headers, data=data, ssl=False) as response:
                         if response.status == 400:
-                            logger.warn("Faucet: Already Claimed")
+                            self.log(
+                                f"{Fore.CYAN + Style.BRIGHT}Faucet:{Style.RESET_ALL}"
+                                f"{Fore.YELLOW + Style.BRIGHT} Already Claimed {Style.RESET_ALL}"
+                            )
                             return None
                         response.raise_for_status()
                         return await response.text()
             except (Exception, ClientResponseError) as e:
                 if attempt < retries - 1:
-                    logger.warn(f"Faucet: Claim attempt {attempt + 1} failed. Retrying in 5 seconds. Error: {str(e)}")
+                    self.log(f"{Fore.YELLOW + Style.BRIGHT}Faucet: Claim attempt {attempt + 1} failed. Retrying in 5 seconds. Error: {str(e)}{Style.RESET_ALL}")
                     await asyncio.sleep(5)
                     continue
-                logger.error(f"Faucet: Not Claimed - {str(e)}")
+                self.log(
+                    f"{Fore.CYAN + Style.BRIGHT}Faucet:{Style.RESET_ALL}"
+                    f"{Fore.RED + Style.BRIGHT} Not Claimed {Style.RESET_ALL}"
+                    f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
+                    f"{Fore.YELLOW + Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
+                )
+
         return None
 
     async def process_check_connection(self, address: str, use_proxy: bool, rotate_proxy: bool):
         while True:
             proxy = self.get_next_proxy_for_account(address) if use_proxy else None
-            if proxy:
-                logger.step(f"Using proxy: {proxy}")
-            else:
-                logger.step("No proxy being used.")
+            self.log(
+                f"{Fore.CYAN + Style.BRIGHT}Proxy :{Style.RESET_ALL}"
+                f"{Fore.WHITE + Style.BRIGHT} {proxy} {Style.RESET_ALL}"
+            )
 
             check = await self.check_connection(proxy)
             if check and check.get("status") == "success":
-                logger.success("Connection check successful.")
+                self.log(f"{Fore.GREEN + Style.BRIGHT}Connection check successful.{Style.RESET_ALL}")
                 return True
             
             if rotate_proxy:
-                logger.warn("Connection check failed. Rotating proxy...")
+                self.log(f"{Fore.YELLOW + Style.BRIGHT}Connection check failed. Rotating proxy...{Style.RESET_ALL}")
                 proxy = self.rotate_proxy_for_account(address)
                 await asyncio.sleep(5)
                 continue
-            else:
-                logger.error("Connection check failed. Not rotating proxy.")
+
+            self.log(f"{Fore.RED + Style.BRIGHT}Connection check failed. Not rotating proxy.{Style.RESET_ALL}")
             return False
         
     async def process_accounts(self, account_private_key: str, use_proxy: bool, rotate_proxy: bool):
         address = self.generate_address(account_private_key)
         if not address:
-            logger.error("Invalid Private Key or Library Version Not Supported")
+            self.log(
+                f"{Fore.RED + Style.BRIGHT}Invalid Private Key or Library Version Not Supported{Style.RESET_ALL}"
+            )
             return 
 
-        logger.step(f"Processing account: {self.mask_account(address)}")
+        self.log(
+            f"{Fore.CYAN + Style.BRIGHT}Processing account: {self.mask_account(address)}{Style.RESET_ALL}"
+        )
 
         is_valid = await self.process_check_connection(address, use_proxy, rotate_proxy)
         if is_valid:
             proxy = self.get_next_proxy_for_account(address) if use_proxy else None
-            logger.loading("Attempting to claim faucet...")
+            self.log(f"{Fore.CYAN + Style.BRIGHT}Attempting to claim faucet...{Style.RESET_ALL}")
             claim = await self.claim_faucet(address, proxy)
             if claim:
-                logger.success("Faucet: Claimed Successfully")
+                self.log(
+                    f"{Fore.CYAN + Style.BRIGHT}Faucet:{Style.RESET_ALL}"
+                    f"{Fore.GREEN + Style.BRIGHT} Claimed Successfully {Style.RESET_ALL}"
+                )
 
-    async def run_faucet_bot(self):
+    async def main(self):
         try:
-            await display_welcome_screen()
-
             with open('accounts.txt', 'r') as file:
                 accounts = [line.strip() for line in file if line.strip()]
 
@@ -336,61 +308,81 @@ class FaucetAutomationCore:
             use_proxy_choice, rotate_proxy = self.print_question()
 
             use_proxy = False
-            if use_proxy_choice == 1: 
+            if use_proxy_choice in [1, 2]:
                 use_proxy = True
 
             while True:
-                await display_welcome_screen()
-                logger.info(f"Account's Total: {len(accounts)}")
+                self.clear_terminal()
+                self.welcome()
+                self.log(
+                    f"{Fore.GREEN + Style.BRIGHT}Account's Total: {Style.RESET_ALL}"
+                    f"{Fore.WHITE + Style.BRIGHT}{len(accounts)}{Style.RESET_ALL}"
+                )
 
                 if use_proxy:
-                    await self.load_proxies(use_proxy_choice) 
+                    await self.load_proxies(use_proxy_choice)
+
+                separator = "=" * 25
+                for account in accounts:
+                    if account:
+                        address = self.generate_address(account)
+                        self.log(
+                            f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(address)} {Style.RESET_ALL}"
+                            f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
+                        )
+
+                        if not address:
+                            self.log(
+                                f"{Fore.CYAN + Style.BRIGHT}Status:{Style.RESET_ALL}"
+                                f"{Fore.RED + Style.BRIGHT} Invalid Private Key or Library Version Not Supported {Style.RESET_ALL}"
+                            )
+                            continue
+                        
+                        await self.process_accounts(address, use_proxy, rotate_proxy)
+
+                self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*72)
                 
-                for account_private_key in accounts: 
-                    await self.process_accounts(account_private_key, use_proxy, rotate_proxy)
-
-                # --- Bagian yang diubah untuk tampilan countdown ---
-                # Cetak pesan "Task Completed" di baris baru
-                # Pastikan baris baru setelah proses akun selesai
-                logger.info("Task Completed ✅ Waiting next Claim 12 Hours")
-                print() # Menambahkan baris kosong setelah pesan Task Completed
-
+                # Pesan Task Completed
+                self.log(f"{Fore.GREEN + Style.BRIGHT}Task Completed ✅ Waiting next Claim 12 Hours{Style.RESET_ALL}")
+                
                 delay = 12 * 60 * 60
                 while delay > 0:
                     formatted_time = self.format_seconds(delay)
-                    # Gunakan \r dan spasi untuk membersihkan baris sebelumnya
-                    print("\r" + " " * 100 + "\r", end="")
-                    
-                    # Cetak countdown yang baru
-                    print(
-                        f"{Colors.CYAN}{Colors.BOLD}[ Wait for{Colors.RESET}"
-                        f"{Colors.WHITE}{Colors.BOLD} {formatted_time} {Colors.RESET}"
-                        f"{Colors.CYAN}{Colors.BOLD}... ]{Colors.RESET}"
-                        f"{Colors.WHITE}{Colors.BOLD} | {Colors.RESET}"
-                        f"{Colors.YELLOW}{Colors.BOLD}Next Claim In{Colors.RESET}",
-                        end="",
-                        flush=True
+                    # Gunakan self.log dengan do_print_newline=False untuk update di tempat
+                    self.log(
+                        f"{Fore.CYAN+Style.BRIGHT}[ Wait for{Style.RESET_ALL}"
+                        f"{Fore.WHITE+Style.BRIGHT} {formatted_time} {Style.RESET_ALL}"
+                        f"{Fore.CYAN+Style.BRIGHT}... ]{Style.RESET_ALL}"
+                        f"{Fore.WHITE+Style.BRIGHT} | {Style.RESET_ALL}"
+                        f"{Fore.YELLOW+Style.BRIGHT}Next Claim In{Style.RESET_ALL}",
+                        do_print_newline=False, # Ini kunci untuk update di tempat
+                        end_char="" # Pastikan tidak ada karakter baris baru di akhir
                     )
                     await asyncio.sleep(1)
                     delay -= 1
                 
-                # Setelah countdown selesai, cetak garis pemisah di baris baru
-                print("\n")
-                logger.info("=" * 72)
-                # --- Akhir bagian yang diubah ---
+                # Setelah countdown selesai, cetak baris baru untuk membersihkan baris countdown terakhir
+                print() # Mencetak baris baru
+                self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*72)
 
         except FileNotFoundError:
-            logger.error("File 'accounts.txt' Not Found.")
+            self.log(f"{Fore.RED}File 'accounts.txt' Not Found.{Style.RESET_ALL}")
             return
         except Exception as e:
-            logger.error(f"An unexpected error occurred: {e}")
+            self.log(f"{Fore.RED+Style.BRIGHT}Error: {e}{Style.RESET_ALL}")
             raise e
 
 if __name__ == "__main__":
     try:
-        faucet_runner_instance = FaucetAutomationCore()
-        asyncio.run(faucet_runner_instance.run_faucet_bot())
+        bot = Injective()
+        asyncio.run(bot.main())
     except KeyboardInterrupt:
-        logger.info("[ EXIT ] Injective Faucet Bot Terminated.")
+        # Pastikan baris bersih sebelum mencetak pesan keluar
+        print(f"\r{' ' * 200}\r", end="", flush=True)
+        bot.log(
+            f"{Fore.RED + Style.BRIGHT}[ EXIT ] Injective - BOT{Style.RESET_ALL}",
+            do_print_newline=True # Cetak pesan exit di baris baru
+        )
     except Exception as e:
-        logger.error(f"Critical error during bot execution: {e}")
+        bot.log(f"{Fore.RED+Style.BRIGHT}Critical error during bot execution: {e}{Style.RESET_ALL}")
