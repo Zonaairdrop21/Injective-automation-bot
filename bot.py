@@ -97,7 +97,7 @@ class FaucetAutomationCore:
         self.proxy_list = []
         self.current_proxy_idx = 0
         self.account_proxy_mapping = {}
-        self.project_id = None # Inisialisasi project_id di sini
+        self.project_id = None
 
     def log(self, message, level="info"):
         if level == "info":
@@ -136,7 +136,7 @@ class FaucetAutomationCore:
     async def load_proxies(self, use_proxy_choice: int):
         filename = "proxy.txt"
         try:
-            if use_proxy_choice == 1: # This is now "Run With Private Proxy"
+            if use_proxy_choice == 1:
                 if not os.path.exists(filename):
                     logger.error(f"File {filename} Not Found.")
                     return
@@ -351,16 +351,15 @@ class FaucetAutomationCore:
 
                 # --- Bagian yang diubah untuk tampilan countdown ---
                 # Cetak pesan "Task Completed" di baris baru
-                print("\n") # Pastikan baris baru setelah proses akun selesai
+                # Pastikan baris baru setelah proses akun selesai
                 logger.info("Task Completed ✅ Waiting next Claim 12 Hours")
+                print() # Menambahkan baris kosong setelah pesan Task Completed
 
                 delay = 12 * 60 * 60
                 while delay > 0:
                     formatted_time = self.format_seconds(delay)
                     # Gunakan \r dan spasi untuk membersihkan baris sebelumnya
-                    # String countdown memiliki panjang sekitar 70-80 karakter.
-                    # Kita akan mencetak 100 spasi untuk memastikan baris bersih.
-                    print("\r" + " " * 100 + "\r", end="") # Bersihkan baris
+                    print("\r" + " " * 100 + "\r", end="")
                     
                     # Cetak countdown yang baru
                     print(
@@ -368,15 +367,15 @@ class FaucetAutomationCore:
                         f"{Colors.WHITE}{Colors.BOLD} {formatted_time} {Colors.RESET}"
                         f"{Colors.CYAN}{Colors.BOLD}... ]{Colors.RESET}"
                         f"{Colors.WHITE}{Colors.BOLD} | {Colors.RESET}"
-                        f"{Colors.YELLOW}{Colors.BOLD}Next Claim In{Colors.RESET}", # Ubah teks menjadi "Next Claim In"
-                        end="", # Jangan gunakan \r di sini karena kita sudah membersihkan baris
+                        f"{Colors.YELLOW}{Colors.BOLD}Next Claim In{Colors.RESET}",
+                        end="",
                         flush=True
                     )
                     await asyncio.sleep(1)
                     delay -= 1
                 
                 # Setelah countdown selesai, cetak garis pemisah di baris baru
-                print("\n") # Pindah ke baris baru setelah countdown selesai
+                print("\n")
                 logger.info("=" * 72)
                 # --- Akhir bagian yang diubah ---
 
