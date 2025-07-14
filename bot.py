@@ -135,19 +135,18 @@ class FaucetAutomationCore:
     async def load_proxies(self, use_proxy_choice: int):
         filename = "proxy.txt"
         try:
-            # Removed Proxyscrape free proxy option here as per request
-            if use_proxy_choice == 1: # This will now be "Run With Private Proxy"
+            if use_proxy_choice == 1: # This is now "Run With Private Proxy"
                 if not os.path.exists(filename):
                     logger.error(f"File {filename} Not Found.")
                     return
                 with open(filename, 'r') as f:
                     self.proxy_list = [line.strip() for line in f.read().splitlines() if line.strip()]
             
-            if not self.proxy_list and use_proxy_choice == 1: # Only warn if private proxy chosen but list is empty
+            if not self.proxy_list and use_proxy_choice == 1:
                 logger.warn("No Private Proxies Found in proxy.txt.")
                 return
 
-            if use_proxy_choice == 1: # Only show total if using private proxies
+            if use_proxy_choice == 1:
                 logger.info(f"Proxies Total: {len(self.proxy_list)}")
         
         except Exception as e:
@@ -177,22 +176,27 @@ class FaucetAutomationCore:
         self.current_proxy_idx = (self.current_proxy_idx + 1) % len(self.proxy_list)
         return proxy
         
-    def generate_address(self, account: str):
+    def generate_address(self, account_private_key: str):
         try:
-            account_obj = Account.from_key(account)
+            # Pastikan kunci privat adalah string heksadesimal yang benar
+            # Account.from_key() bisa menerima dengan atau tanpa '0x' prefix
+            account_obj = Account.from_key(account_private_key)
             address = account_obj.address
             return address
         except Exception as e:
             logger.error(f"Error generating address: {e}")
             return None
     
-    def mask_account(self, account):
+    def mask_account(self, address: str):
+        # Memastikan address bukan None sebelum mencoba mengiris string
+        if address is None:
+            return "None" # Atau string lain yang menunjukkan kesalahan
         try:
-            mask_account = account[:6] + '*' * 6 + account[-6:]
-            return mask_account
+            mask_address = address[:6] + '*' * 6 + address[-6:]
+            return mask_address
         except Exception as e:
             logger.error(f"Error masking account: {e}")
-            return None
+            return "Error Masking"
 
     def generate_inj_address(self, address: str):
         try:
@@ -210,7 +214,7 @@ class FaucetAutomationCore:
     def print_question(self):
         while True:
             try:
-                # Mengurangi pilihan proxy menjadi 2 saja
+                # Hanya ada 2 pilihan sekarang
                 print(f"{Colors.WHITE}{Colors.BOLD}1. Run With Private Proxy{Colors.RESET}")
                 print(f"{Colors.WHITE}{Colors.BOLD}2. Run Without Proxy{Colors.RESET}")
                 choose = int(input(f"{Colors.BLUE}{Colors.BOLD}Choose [1/2] -> {Colors.RESET}").strip())
@@ -299,7 +303,16 @@ class FaucetAutomationCore:
                 logger.error("Connection check failed. Not rotating proxy.")
             return False
         
-    async def process_accounts(self, address: str, use_proxy: bool, rotate_proxy: bool):
+    async def process_accounts(self, account_private_key: str, use_proxy: bool, rotate_proxy: bool):
+        address = self.generate_address(account_private_key)
+        # Tambahkan pemeriksaan di sini untuk alamat yang tidak valid
+        if not address:
+            logger.error("Invalid Private Key or Library Version Not Supported")
+            # Tidak perlu `continue` di sini karena ini sudah di dalam proses_accounts
+            return 
+
+        logger.step(f"Processing account: {self.mask_account(address)}")
+
         is_valid = await self.process_check_connection(address, use_proxy, rotate_proxy)
         if is_valid:
             proxy = self.get_next_proxy_for_account(address) if use_proxy else None
@@ -322,7 +335,6 @@ class FaucetAutomationCore:
             use_proxy_choice, rotate_proxy = self.print_question()
 
             use_proxy = False
-            # Pilihan 1 sekarang adalah "With Private Proxy"
             if use_proxy_choice == 1: 
                 use_proxy = True
 
@@ -331,19 +343,12 @@ class FaucetAutomationCore:
                 logger.info(f"Account's Total: {len(accounts)}")
 
                 if use_proxy:
-                    # use_proxy_choice 1 sekarang berarti menggunakan private proxy
                     await self.load_proxies(use_proxy_choice) 
+                
+                # Menggunakan account_private_key sebagai input ke process_accounts
+                for account_private_key in accounts: 
+                    await self.process_accounts(account_private_key, use_proxy, rotate_proxy)
 
-                for account in accounts:
-                    if account:
-                        address = self.generate_address(account)
-                        logger.step(f"Processing account: {self.mask_account(address)}")
-
-                        if not address:
-                            logger.error("Invalid Private Key or Library Version Not Supported")
-                            continue
-                        
-                        await self.process_accounts(address, use_proxy, rotate_proxy)
 
                 # Pindahkan baris ini agar tidak ditimpa countdown
                 # logger.info("=" * 72) 
@@ -351,13 +356,13 @@ class FaucetAutomationCore:
                 delay = 12 * 60 * 60
                 while delay > 0:
                     formatted_time = self.format_seconds(delay)
-                    # Tambahkan spasi di akhir untuk membersihkan karakter lama
+                    # Tambahkan spasi yang cukup di akhir untuk membersihkan karakter lama
                     print(
                         f"{Colors.CYAN}{Colors.BOLD}[ Wait for{Colors.RESET}"
                         f"{Colors.WHITE}{Colors.BOLD} {formatted_time} {Colors.RESET}"
                         f"{Colors.CYAN}{Colors.BOLD}... ]{Colors.RESET}"
                         f"{Colors.WHITE}{Colors.BOLD} | {Colors.RESET}"
-                        f"{Colors.YELLOW}{Colors.BOLD}All Accounts Have Been Processed...{Colors.RESET}   ", # Added spaces
+                        f"{Colors.YELLOW}{Colors.BOLD}All Accounts Have Been Processed...{Colors.RESET}       ", # Added more spaces
                         end="\r",
                         flush=True
                     )
